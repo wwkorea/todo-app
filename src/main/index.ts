@@ -1,6 +1,6 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage } from 'electron'
+import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { loadConfig, saveConfig } from './config'
 import {
   createTab,
@@ -51,6 +51,27 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false
     }
+  })
+
+  // 본문 링크로 인한 페이지 이동/새 창은 전부 차단하고, 대신 OS 기본 프로그램으로 연결
+  // (에디터 링크 툴팁의 '열기' 버튼도 이 경로를 탄다)
+  const openLinkExternally = (url: string): void => {
+    if (url.startsWith('file://')) {
+      const p = decodeURI(url.replace(/^file:\/{2,3}/, ''))
+      if (fs.existsSync(p)) void shell.openPath(p)
+    } else if (/^https?:\/\//i.test(url)) {
+      void shell.openExternal(url)
+    }
+  }
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    const devUrl = process.env.ELECTRON_RENDERER_URL
+    if (devUrl && url.startsWith(devUrl)) return
+    e.preventDefault()
+    openLinkExternally(url)
+  })
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    openLinkExternally(url)
+    return { action: 'deny' }
   })
 
   // 창 닫기 = 트레이로 숨김 (항상 띄워두는 앱)
@@ -130,6 +151,29 @@ function registerIpc(): void {
 
   ipcMain.handle('settings:save', (_e, settings: GlobalSettings) => {
     saveGlobalSettings(requireDataDir(), settings)
+  })
+
+  // ---- 파일 링크 (본문의 file:// 링크 → 기본 연결 프로그램으로 실행) ----
+
+  ipcMain.handle('dialog:pick-file', async () => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: '링크할 파일 선택',
+      properties: ['openFile']
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
+
+  ipcMain.handle('file:open', async (_e, p: string) => {
+    if (!fs.existsSync(p)) {
+      return { ok: false, error: '파일을 찾을 수 없습니다 (이동/삭제되었을 수 있음)' }
+    }
+    const err = await shell.openPath(p)
+    return err ? { ok: false, error: err } : { ok: true }
+  })
+
+  ipcMain.handle('file:open-external', (_e, url: string) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
   })
 }
 
