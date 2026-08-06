@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import pkg from "../../../../package.json";
 import {
   Button,
   Divider,
@@ -252,6 +253,9 @@ export default function SettingsModal({
           </>
         )}
       </Form>
+      <div className="app-credit">
+        rag-todo-app v{pkg.version} · made by {pkg.author}
+      </div>
     </Modal>
   );
 }
