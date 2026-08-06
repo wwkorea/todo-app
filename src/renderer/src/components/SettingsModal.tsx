@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Divider,
@@ -32,6 +32,27 @@ export default function SettingsModal({
   const [newTabName, setNewTabName] = useState("");
   const [newTabType, setNewTabType] = useState<"todo" | "memo">("todo");
   const [busy, setBusy] = useState(false);
+  const [aiKeyInput, setAiKeyInput] = useState("");
+  const [hasAiKey, setHasAiKey] = useState(false);
+
+  useEffect(() => {
+    if (open) void window.api.hasAiKey().then(setHasAiKey);
+  }, [open]);
+
+  const saveAiKey = async (): Promise<void> => {
+    const key = aiKeyInput.trim();
+    if (!key) return;
+    await window.api.setAiKey(key);
+    setAiKeyInput("");
+    setHasAiKey(true);
+    message.success("API 키를 암호화해서 저장했습니다");
+  };
+
+  const clearAiKey = async (): Promise<void> => {
+    await window.api.setAiKey(null);
+    setHasAiKey(false);
+    message.success("API 키를 삭제했습니다");
+  };
 
   const effectiveDir = pickedDir ?? dataDir;
 
@@ -156,6 +177,58 @@ export default function SettingsModal({
                   v && void saveSettingsPatch({ backup_keep: v })
                 }
               />
+            </Form.Item>
+
+            <Divider plain>AI (사내 LLM, OpenAI 호환 API)</Divider>
+            <Form.Item
+              label="API 주소 (base URL)"
+              help="예: http://llm.company.local/v1 — 뒤에 /chat/completions는 앱이 붙입니다"
+            >
+              <Input
+                placeholder="http://..."
+                value={settings.ai?.base_url ?? ""}
+                onChange={(e) =>
+                  void saveSettingsPatch({
+                    ai: { model: "", ...settings.ai, base_url: e.target.value },
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item label="모델명">
+              <Input
+                placeholder="예: company-llm-v1"
+                value={settings.ai?.model ?? ""}
+                onChange={(e) =>
+                  void saveSettingsPatch({
+                    ai: { base_url: "", ...settings.ai, model: e.target.value },
+                  })
+                }
+              />
+            </Form.Item>
+            <Form.Item
+              label="API 키"
+              help={
+                hasAiKey
+                  ? "키가 이 PC에 암호화 저장되어 있습니다. 변경하려면 새 키를 입력 후 저장하세요."
+                  : "키는 데이터 폴더가 아닌 이 PC의 앱 설정에 암호화(Windows DPAPI) 저장됩니다."
+              }
+            >
+              <Space.Compact style={{ width: "100%" }}>
+                <Input.Password
+                  value={aiKeyInput}
+                  onChange={(e) => setAiKeyInput(e.target.value)}
+                  placeholder={hasAiKey ? "●●●●●●  저장됨" : "API 키 입력"}
+                  onPressEnter={() => void saveAiKey()}
+                />
+                <Button onClick={() => void saveAiKey()} disabled={!aiKeyInput.trim()}>
+                  저장
+                </Button>
+                {hasAiKey && (
+                  <Button danger onClick={() => void clearAiKey()}>
+                    삭제
+                  </Button>
+                )}
+              </Space.Compact>
             </Form.Item>
 
             <Divider plain>새 탭 추가</Divider>

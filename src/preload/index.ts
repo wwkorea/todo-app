@@ -22,7 +22,15 @@ const api = {
   createTab: (folder: string, setting: TabSetting): Promise<AppData> =>
     ipcRenderer.invoke('tab:create', folder, setting),
   saveSettings: (settings: GlobalSettings): Promise<void> =>
-    ipcRenderer.invoke('settings:save', settings)
+    ipcRenderer.invoke('settings:save', settings),
+  aiComplete: (
+    cfg: { base_url: string; model: string },
+    messages: { role: string; content: string }[]
+  ): Promise<{ ok: boolean; content?: string; error?: string }> =>
+    ipcRenderer.invoke('ai:complete', cfg, messages),
+  /** AI API 키 — main에서 safeStorage로 암호화 저장, renderer는 값을 다시 읽을 수 없음 */
+  setAiKey: (key: string | null): Promise<void> => ipcRenderer.invoke('ai:set-key', key),
+  hasAiKey: (): Promise<boolean> => ipcRenderer.invoke('ai:has-key')
 }
 
 export type Api = typeof api

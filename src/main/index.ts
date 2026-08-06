@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, shell } from 'electron'
-import { loadConfig, saveConfig } from './config'
+import { getAiKey, loadConfig, saveConfig, setAiKey } from './config'
 import {
   createTab,
   deleteItem,
@@ -21,6 +21,18 @@ function requireDataDir(): string {
   const { dataDir } = loadConfig()
   if (!dataDir) throw new Error('data directory is not configured')
   return dataDir
+}
+
+/** 구버전 마이그레이션: settings.json에 평문 api_key가 있으면 암호화 저장소로 옮기고 제거 */
+function loadAllMigrated(dataDir: string): ReturnType<typeof loadAll> {
+  const data = loadAll(dataDir)
+  const ai = data.settings.ai as ((typeof data.settings)['ai'] & { api_key?: string }) | undefined
+  if (ai?.api_key) {
+    if (!getAiKey()) setAiKey(ai.api_key)
+    delete ai.api_key
+    saveGlobalSettings(dataDir, data.settings)
+  }
+  return data
 }
 
 function createTrayIcon(): Electron.NativeImage {
@@ -126,10 +138,10 @@ function registerIpc(): void {
     }
     ensureDataDir(dataDir)
     saveConfig({ dataDir })
-    return loadAll(dataDir)
+    return loadAllMigrated(dataDir)
   })
 
-  ipcMain.handle('data:load', () => loadAll(requireDataDir()))
+  ipcMain.handle('data:load', () => loadAllMigrated(requireDataDir()))
 
   ipcMain.handle('item:save', (_e, tabDir: string, item: Item, backupKeep: number) => {
     saveItem(requireDataDir(), tabDir, item, backupKeep)
@@ -146,7 +158,7 @@ function registerIpc(): void {
   ipcMain.handle('tab:create', (_e, folder: string, setting: TabSetting) => {
     if (!/^[\w-]+$/.test(folder)) throw new Error('탭 폴더명은 영문/숫자/-/_ 만 가능합니다')
     createTab(requireDataDir(), folder, setting)
-    return loadAll(requireDataDir())
+    return loadAllMigrated(requireDataDir())
   })
 
   ipcMain.handle('settings:save', (_e, settings: GlobalSettings) => {
@@ -175,6 +187,55 @@ function registerIpc(): void {
   ipcMain.handle('file:open-external', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
   })
+
+  // ---- AI API 키 (userData에 safeStorage 암호화 저장 — 데이터 폴더에 넣지 않음) ----
+
+  ipcMain.handle('ai:set-key', (_e, key: string | null) => {
+    setAiKey(key && key.trim() ? key.trim() : null)
+  })
+
+  ipcMain.handle('ai:has-key', () => getAiKey() !== null)
+
+  // ---- 사내 LLM 호출 (OpenAI 호환 chat/completions) ----
+  // renderer의 CSP/CORS 제약을 피하기 위해 main 프로세스에서 호출한다
+  // API 키는 renderer를 거치지 않고 main에서 직접 읽는다
+  ipcMain.handle(
+    'ai:complete',
+    async (
+      _e,
+      cfg: { base_url: string; model: string },
+      messages: { role: string; content: string }[]
+    ): Promise<{ ok: boolean; content?: string; error?: string }> => {
+      try {
+        const apiKey = getAiKey()
+        const url = `${cfg.base_url.replace(/\/+$/, '')}/chat/completions`
+        const controller = new AbortController()
+        const timer = setTimeout(() => controller.abort(), 120_000)
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {})
+          },
+          body: JSON.stringify({ model: cfg.model, messages, temperature: 0.2 }),
+          signal: controller.signal
+        }).finally(() => clearTimeout(timer))
+        if (!res.ok) {
+          const text = (await res.text()).slice(0, 300)
+          return { ok: false, error: `HTTP ${res.status}: ${text}` }
+        }
+        const data = (await res.json()) as {
+          choices?: { message?: { content?: string } }[]
+        }
+        const content = data.choices?.[0]?.message?.content
+        if (!content) return { ok: false, error: '응답에 content가 없습니다' }
+        return { ok: true, content }
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        return { ok: false, error: msg.includes('abort') ? '요청 시간 초과 (120초)' : msg }
+      }
+    }
+  )
 }
 
 app.whenReady().then(() => {
