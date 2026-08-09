@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import dayjs from 'dayjs'
-import type { AppData, GlobalSettings, Item, TabData } from '../../shared/types'
+import type { AdviceRecord, AppData, GlobalSettings, Item, TabData } from '../../shared/types'
 import { DEFAULT_GLOBAL_SETTINGS, defaultTabSetting } from '../../shared/types'
 
 export type SaveState = 'saved' | 'dirty' | 'saving'
@@ -18,6 +18,10 @@ interface AppState {
   query: string
   saveState: SaveState
   settingsOpen: boolean
+  /** 항목별 AI 도움말 캐시. key = `${tabDir}/${itemId}` */
+  advice: Record<string, AdviceRecord>
+  /** 현재 도움말 생성 중인 key (동시 1건만) */
+  adviceBusy: string | null
 }
 
 export const useAppStore = create<AppState>(() => ({
@@ -31,7 +35,9 @@ export const useAppStore = create<AppState>(() => ({
   openItemId: null,
   query: '',
   saveState: 'saved',
-  settingsOpen: false
+  settingsOpen: false,
+  advice: {},
+  adviceBusy: null
 }))
 
 const set = useAppStore.setState
@@ -72,6 +78,7 @@ export async function init(): Promise<void> {
   }
   try {
     applyData(await window.api.loadData())
+    set({ advice: await window.api.loadAdvice() })
   } catch (e) {
     console.error('failed to load data dir, falling back to setup', e)
     set({ ready: true, needSetup: true })
@@ -80,6 +87,7 @@ export async function init(): Promise<void> {
 
 export async function setDataDir(dir: string): Promise<void> {
   applyData(await window.api.initData(dir))
+  set({ advice: await window.api.loadAdvice() })
 }
 
 export async function reloadData(): Promise<void> {

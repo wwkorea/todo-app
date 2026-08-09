@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import matter from 'gray-matter'
 import {
+  AdviceRecord,
   AppData,
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_TOKENS,
@@ -188,4 +189,36 @@ export function saveTabSetting(dataDir: string, tabDir: string, setting: TabSett
 
 export function saveGlobalSettings(dataDir: string, settings: GlobalSettings): void {
   atomicWrite(path.join(dataDir, 'settings.json'), JSON.stringify(settings, null, 2))
+}
+
+// ---- AI 도움말 사이드카 (.ai/advice/<탭>/<id>.json) ----
+
+export function loadAdvice(dataDir: string): Record<string, AdviceRecord> {
+  const root = path.join(dataDir, '.ai', 'advice')
+  const out: Record<string, AdviceRecord> = {}
+  if (!fs.existsSync(root)) return out
+  for (const tab of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!tab.isDirectory()) continue
+    for (const f of fs.readdirSync(path.join(root, tab.name))) {
+      if (!f.endsWith('.json')) continue
+      try {
+        const rec = JSON.parse(fs.readFileSync(path.join(root, tab.name, f), 'utf-8'))
+        out[`${tab.name}/${f.slice(0, -5)}`] = rec
+      } catch (e) {
+        console.error(`failed to parse advice ${tab.name}/${f}`, e)
+      }
+    }
+  }
+  return out
+}
+
+export function saveAdvice(
+  dataDir: string,
+  tabDir: string,
+  id: string,
+  record: AdviceRecord
+): void {
+  const dir = path.join(dataDir, '.ai', 'advice', tabDir)
+  fs.mkdirSync(dir, { recursive: true })
+  atomicWrite(path.join(dir, `${id}.json`), JSON.stringify(record, null, 2))
 }

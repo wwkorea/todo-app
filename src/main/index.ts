@@ -6,12 +6,14 @@ import {
   createTab,
   deleteItem,
   ensureDataDir,
+  loadAdvice,
   loadAll,
+  saveAdvice,
   saveGlobalSettings,
   saveItem,
   saveTabSetting
 } from './store'
-import type { GlobalSettings, Item, TabSetting } from '../shared/types'
+import type { AdviceRecord, GlobalSettings, Item, TabSetting } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -186,6 +188,14 @@ function registerIpc(): void {
 
   ipcMain.handle('file:open-external', (_e, url: string) => {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
+  })
+
+  // ---- AI 도움말 사이드카 ----
+
+  ipcMain.handle('advice:load', () => loadAdvice(requireDataDir()))
+
+  ipcMain.handle('advice:save', (_e, tabDir: string, id: string, record: AdviceRecord) => {
+    saveAdvice(requireDataDir(), tabDir, id, record)
   })
 
   // ---- AI API 키 (userData에 safeStorage 암호화 저장 — 데이터 폴더에 넣지 않음) ----

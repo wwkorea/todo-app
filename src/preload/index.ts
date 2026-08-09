@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import type { AppData, GlobalSettings, Item, TabSetting } from '../shared/types'
+import type { AdviceRecord, AppData, GlobalSettings, Item, TabSetting } from '../shared/types'
 
 const api = {
   getConfig: (): Promise<{ dataDir: string | null }> => ipcRenderer.invoke('config:get'),
@@ -28,6 +28,9 @@ const api = {
     messages: { role: string; content: string }[]
   ): Promise<{ ok: boolean; content?: string; error?: string }> =>
     ipcRenderer.invoke('ai:complete', cfg, messages),
+  loadAdvice: (): Promise<Record<string, AdviceRecord>> => ipcRenderer.invoke('advice:load'),
+  saveAdvice: (tabDir: string, id: string, record: AdviceRecord): Promise<void> =>
+    ipcRenderer.invoke('advice:save', tabDir, id, record),
   /** AI API 키 — main에서 safeStorage로 암호화 저장, renderer는 값을 다시 읽을 수 없음 */
   setAiKey: (key: string | null): Promise<void> => ipcRenderer.invoke('ai:set-key', key),
   hasAiKey: (): Promise<boolean> => ipcRenderer.invoke('ai:has-key')
