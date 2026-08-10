@@ -4,6 +4,7 @@ import matter from 'gray-matter'
 import {
   AdviceRecord,
   AppData,
+  ChatEntry,
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_TOKENS,
   GlobalSettings,
@@ -221,4 +222,22 @@ export function saveAdvice(
   const dir = path.join(dataDir, '.ai', 'advice', tabDir)
   fs.mkdirSync(dir, { recursive: true })
   atomicWrite(path.join(dir, `${id}.json`), JSON.stringify(record, null, 2))
+}
+
+// ---- AI 대화 사이드카 (.ai/chat/<탭>/<id>.json) — 항목 열 때 개별 로드 ----
+
+export function loadChat(dataDir: string, tabDir: string, id: string): ChatEntry[] {
+  try {
+    const raw = fs.readFileSync(path.join(dataDir, '.ai', 'chat', tabDir, `${id}.json`), 'utf-8')
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export function saveChat(dataDir: string, tabDir: string, id: string, entries: ChatEntry[]): void {
+  const dir = path.join(dataDir, '.ai', 'chat', tabDir)
+  fs.mkdirSync(dir, { recursive: true })
+  atomicWrite(path.join(dir, `${id}.json`), JSON.stringify(entries, null, 2))
 }

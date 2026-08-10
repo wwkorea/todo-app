@@ -8,12 +8,14 @@ import {
   ensureDataDir,
   loadAdvice,
   loadAll,
+  loadChat,
   saveAdvice,
+  saveChat,
   saveGlobalSettings,
   saveItem,
   saveTabSetting
 } from './store'
-import type { AdviceRecord, GlobalSettings, Item, TabSetting } from '../shared/types'
+import type { AdviceRecord, ChatEntry, GlobalSettings, Item, TabSetting } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -196,6 +198,16 @@ function registerIpc(): void {
 
   ipcMain.handle('advice:save', (_e, tabDir: string, id: string, record: AdviceRecord) => {
     saveAdvice(requireDataDir(), tabDir, id, record)
+  })
+
+  // ---- AI 대화 사이드카 ----
+
+  ipcMain.handle('chat:load', (_e, tabDir: string, id: string) =>
+    loadChat(requireDataDir(), tabDir, id)
+  )
+
+  ipcMain.handle('chat:save', (_e, tabDir: string, id: string, entries: ChatEntry[]) => {
+    saveChat(requireDataDir(), tabDir, id, entries)
   })
 
   // ---- AI API 키 (userData에 safeStorage 암호화 저장 — 데이터 폴더에 넣지 않음) ----
