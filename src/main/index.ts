@@ -248,16 +248,29 @@ function registerIpc(): void {
   )
 }
 
-app.whenReady().then(() => {
-  registerIpc()
-  createWindow()
-  createTray()
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    else mainWindow?.show()
+// 단일 인스턴스: 이미 실행 중이면 새 프로세스는 즉시 종료하고 기존 창을 앞으로 띄운다
+// (중복 실행 시 프로세스·트레이 아이콘이 누적되는 문제 방지)
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return
+    mainWindow.show()
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
   })
-})
+
+  app.whenReady().then(() => {
+    registerIpc()
+    createWindow()
+    createTray()
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      else mainWindow?.show()
+    })
+  })
+}
 
 app.on('before-quit', () => {
   quitting = true
