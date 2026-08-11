@@ -2,6 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, shell } from 'electron'
 import { getAiKey, loadConfig, saveConfig, setAiKey } from './config'
+import appIconPath from '../../build/icon.png?asset'
 import {
   createTab,
   deleteItem,
@@ -39,29 +40,13 @@ function loadAllMigrated(dataDir: string): ReturnType<typeof loadAll> {
   return data
 }
 
-function createTrayIcon(): Electron.NativeImage {
-  // 16x16 단색(포인트 컬러) 사각형 아이콘을 코드로 생성 (BGRA)
-  const size = 16
-  const buf = Buffer.alloc(size * size * 4)
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4
-      const edge = x === 0 || y === 0 || x === size - 1 || y === size - 1
-      buf[i] = edge ? 120 : 237 // B
-      buf[i + 1] = edge ? 90 : 111 // G
-      buf[i + 2] = edge ? 60 : 47 // R
-      buf[i + 3] = 255 // A
-    }
-  }
-  return nativeImage.createFromBitmap(buf, { width: size, height: size })
-}
-
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 800,
     minWidth: 700,
     minHeight: 500,
+    icon: appIconPath,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -106,7 +91,8 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  tray = new Tray(createTrayIcon())
+  const trayIcon = nativeImage.createFromPath(appIconPath).resize({ width: 16, height: 16 })
+  tray = new Tray(trayIcon)
   tray.setToolTip('Todo')
   tray.setContextMenu(
     Menu.buildFromTemplate([

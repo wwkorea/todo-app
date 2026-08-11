@@ -1,0 +1,14 @@
+appId: com.ham.rag-todo-app
+productName: rag-todo-app
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+win:
+  icon: build/icon.ico
+  target:
+    - portable
+portable:
+  artifactName: ${productName}-${version}-portable.exe
+# 서명 안 함 (배포 시 SmartScreen 경고 → "추가 정보 → 실행" 안내)
